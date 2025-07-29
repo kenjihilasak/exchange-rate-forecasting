@@ -1,54 +1,44 @@
-def evaluate_rmse_forecast(df_forecast, df_real, col_forecast='rate_pred', col_actual='rate'):
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+import numpy as np
+
+def evaluate_rmse_mae_per_path(df_paths, df_test, rate_col='rate'):
     """
-    Compute RMSE between forecasted and actual exchange rates (or log_rates).
+    Evaluate RMSE and MAE for each simulated path against the real test data.
 
     Parameters:
-    - df_forecast: DataFrame with predicted values (indexed by date)
-    - df_real: DataFrame with actual values (indexed by date)
-    - col_forecast: column name in df_forecast (e.g. 'rate_pred' or 'log_rate_pred')
-    - col_actual: column name in df_real (e.g. 'rate' or 'log_rate')
+    - df_paths: DataFrame with simulated forecast paths (n_paths x horizon)
+                columns = dates, rows = simulated paths
+    - df_test: DataFrame with actual test data (must include rate_col and matching dates)
+    - rate_col: column name in df_test with actual exchange rate
 
     Returns:
-    - rmse: root mean square error
+    - rmse_values: np.array of RMSE values (length = n_paths)
+    - expected_rmse: float, mean RMSE across all paths (Monte Carlo expectation)
+    - mae_values: np.array of MAE values (length = n_paths)
+    - expected_mae: float, mean MAE across all paths (Monte Carlo expectation)
     """
-    # Align both dataframes on index (date)
-    df_eval = df_forecast[[col_forecast]].join(df_real[[col_actual]], how='inner')
 
-    # Extract arrays
-    y_pred = df_eval[col_forecast].values
-    y_true = df_eval[col_actual].values
+    # Drop rows in df_test where rate is NaN
+    df_eval = df_test[[rate_col]].dropna().copy()
 
-    # Compute RMSE
-    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-    print(f"✅ RMSE between simulated forecast and real data: {rmse:.6f}")
-    
-    return rmse
+    # Find overlapping dates between df_test and forecast paths
+    eval_dates = df_eval.index.intersection(df_paths.columns)
 
-def evaluate_rmse_horizons(df_forecast, df_real,
-                           col_forecast='rate_pred', col_actual='rate'):
-    """
-    Compute RMSE over 6 months, 12 months, and full forecast period.
-    """
-    # Align the dataframes
-    df = df_forecast[[col_forecast]].join(df_real[[col_actual]], how='inner')
-    df = df.sort_index()
-    
-    # Define horizon lengths (in days)
-    horizons = {
-        '6_months':  6 * 30,   # ≈180 days
-        '12_months': 12 * 30,  # ≈360 days
-        'all':       len(df)
-    }
-    results = {}
+    # Extract true values only for valid dates
+    y_true = df_eval.loc[eval_dates, rate_col].values
 
-    for name, days in horizons.items():
-        sub = df.iloc[:days]
-        if sub.empty:
-            results[name] = np.nan
-            continue
+    # Evaluate RMSE and MAE per path
+    rmse_values = []
+    mae_values = []
+    for i in range(df_paths.shape[0]):
+        y_pred = df_paths.loc[i, eval_dates].values
+        rmse_values.append(np.sqrt(mean_squared_error(y_true, y_pred)))
+        mae_values.append(mean_absolute_error(y_true, y_pred))
 
-        rmse_val = np.sqrt(mean_squared_error(sub[col_actual], sub[col_forecast]))
-        results[name] = rmse_val
-        print(f"✅ RMSE @ {name.replace('_', ' ')} ({days} days): {rmse_val:.6f}")
+    rmse_values = np.array(rmse_values)
+    mae_values = np.array(mae_values)
 
-    return results
+    expected_rmse = rmse_values.mean()
+    expected_mae = mae_values.mean()
+
+    return rmse_values, expected_rmse, mae_values, expected_mae

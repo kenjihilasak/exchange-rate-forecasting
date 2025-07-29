@@ -1,6 +1,6 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
+import pandas as pd # type: ignore
+import numpy as np # type: ignore
+import matplotlib.pyplot as plt # type: ignore
 import random
 
 # ----------------------------------------
@@ -156,29 +156,42 @@ def forecast_from_multiple_paths(train_df, paths, k, mu, log_rate_col='log_rate'
 # ----------------------------------------
 # STEP 4: Plot some forecast paths vs historical data
 # ----------------------------------------
-def plot_multiple_paths_vs_history(train_df, df_paths, rate_col='rate', n_show=30):
+def plot_multiple_paths_vs_history(train_df, df_paths, df_test=None, rate_col='rate', n_show=30):
     """
-    Plot historical data and multiple forecasted paths.
-    
+    Plot historical data, multiple forecasted paths, and optional test data.
+
     Parameters:
     - train_df: DataFrame with historical data (datetime index)
     - df_paths: DataFrame with simulated forecast paths (n_paths x horizon)
-    - rate_col: column with historical exchange rate
-    - n_show: number of paths to display
+    - df_test: optional DataFrame with real test data (datetime index)
+    - rate_col: column with exchange rate (for train and test DataFrames)
+    - n_show: number of simulated paths to display
     """
     df_hist = train_df[[rate_col]].copy()
-    
+
     plt.figure(figsize=(12, 6))
-    
-    # Historical
-    plt.plot(df_hist.index, df_hist[rate_col], label='Historical', linewidth=2)
 
-    # Show up to n_show paths
+    # Historical data
+    plt.plot(df_hist.index, df_hist[rate_col], label='Train (rate)', linewidth=1, color='blue')
+
+    # Test data (if provided)
+    if df_test is not None:
+        plt.plot(df_test.index, df_test[rate_col], label='Test (actual)', linewidth=1, color='orange')
+
+    # Forecast paths with label only the first one
     for i in range(min(n_show, df_paths.shape[0])):
-        plt.plot(df_paths.columns, df_paths.iloc[i], color='gray', alpha=0.5, linewidth=1)
+        if i == 0:
+            plt.plot(df_paths.columns, df_paths.iloc[i], color='gray', alpha=0.5, linewidth=0.5, label='Forecast paths')
+        else:
+            plt.plot(df_paths.columns, df_paths.iloc[i], color='gray', alpha=0.5, linewidth=0.5)
 
+    # Visual markers
     plt.axvline(x=df_hist.index[-1], color='gray', linestyle=':', label='Forecast start')
-    plt.title(f'Historical vs {df_paths.shape[0]} Monte Carlo Paths')
+
+    # Limit the x-axis: last date of forecast paths
+    # plt.xlim(df_hist.index[0], df_paths.columns[-1])
+
+    plt.title(f'Historical, Test & {df_paths.shape[0]} Monte Carlo Paths')
     plt.xlabel('Date')
     plt.ylabel('Exchange Rate')
     plt.grid(True)
