@@ -146,10 +146,17 @@ def forecast_from_multiple_paths(train_df, paths, k, mu, log_rate_col='log_rate'
     predicted_log_rates = X_o + drift + W_t_paths  # shape (n_paths, horizon)
     predicted_rates = np.exp(predicted_log_rates)  # shape (n_paths, horizon)
 
-    # Create DataFrame
+    # Create DataFrame with future dates
     last_date = train_df.index[-1]
-    future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=horizon)
-    df_paths = pd.DataFrame(predicted_rates, columns=future_dates)
+    future_dates = pd.date_range(start=last_date, periods=horizon + 1)  # +1 for X_o
+    
+    # Add X_o as first column for all paths
+    all_rates = np.column_stack([
+        np.full(n_paths, np.exp(X_o)),  # First column with X_o
+        predicted_rates  # Rest of predictions
+    ])
+    
+    df_paths = pd.DataFrame(all_rates, columns=future_dates)
 
     return df_paths
 
@@ -158,7 +165,7 @@ def forecast_from_multiple_paths(train_df, paths, k, mu, log_rate_col='log_rate'
 # ----------------------------------------
 def plot_multiple_paths_vs_history(train_df, df_paths, df_test=None, rate_col='rate', n_show=30):
     """
-    Plot historical data, multiple forecasted paths, and optional test data.
+    Plot last 30 days of historical data, forecast paths, and optional test data.
 
     Parameters:
     - train_df: DataFrame with historical data (datetime index)
@@ -167,31 +174,41 @@ def plot_multiple_paths_vs_history(train_df, df_paths, df_test=None, rate_col='r
     - rate_col: column with exchange rate (for train and test DataFrames)
     - n_show: number of simulated paths to display
     """
-    df_hist = train_df[[rate_col]].copy()
+    # Get last 30 days of historical data
+    df_hist = train_df[['rate_interpolated']].last('30D')
 
+    # Get forecast period dates
+    forecast_start = df_paths.columns[0]
+    forecast_end = df_paths.columns[-1]
+    
     plt.figure(figsize=(12, 6))
 
-    # Historical data
-    plt.plot(df_hist.index, df_hist[rate_col], label='Train (rate)', linewidth=1, color='blue')
+    # Historical data (last 30 days)
+    plt.plot(df_hist.index, df_hist['rate_interpolated'], 
+             label='Train (interpolated rate)', linewidth=1, color='blue')
 
-    # Test data (if provided)
+    # Test data (if provided) - only for forecast period
     if df_test is not None:
-        plt.plot(df_test.index, df_test[rate_col], label='Test (actual)', linewidth=1, color='orange')
+        mask = (df_test.index >= forecast_start) & (df_test.index <= forecast_end)
+        df_test_period = df_test[mask]
+        plt.plot(df_test_period.index, df_test_period[rate_col], 
+                label='Test (actual)', linewidth=1, color='orange')
 
     # Forecast paths with label only the first one
     for i in range(min(n_show, df_paths.shape[0])):
         if i == 0:
-            plt.plot(df_paths.columns, df_paths.iloc[i], color='gray', alpha=0.5, linewidth=0.5, label='Forecast paths')
+            plt.plot(df_paths.columns, df_paths.iloc[i], 
+                    color='gray', alpha=0.5, linewidth=0.5, 
+                    label='Forecast paths')
         else:
-            plt.plot(df_paths.columns, df_paths.iloc[i], color='gray', alpha=0.5, linewidth=0.5)
+            plt.plot(df_paths.columns, df_paths.iloc[i], 
+                    color='gray', alpha=0.5, linewidth=0.5)
 
     # Visual markers
-    plt.axvline(x=df_hist.index[-1], color='gray', linestyle=':', label='Forecast start')
+    plt.axvline(x=df_hist.index[-1], 
+                color='gray', linestyle=':', label='Forecast start')
 
-    # Limit the x-axis: last date of forecast paths
-    # plt.xlim(df_hist.index[0], df_paths.columns[-1])
-
-    plt.title(f'Historical, Test & {df_paths.shape[0]} Monte Carlo Paths')
+    plt.title(f'Last 30 Days + {df_paths.shape[0]} Monte Carlo Paths')
     plt.xlabel('Date')
     plt.ylabel('Exchange Rate')
     plt.grid(True)

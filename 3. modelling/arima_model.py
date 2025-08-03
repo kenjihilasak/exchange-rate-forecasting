@@ -1,86 +1,122 @@
+from cmath import exp
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-def forecast_and_plot_arima(res, train_df, test_df, steps=712, rate_col='rate', title='ARIMA Forecast vs Actual Rates'):
+def simulate_paths_and_plot(res, train_df, test_df, steps, n_sims=1000, n_show=30, rate_col='rate'):
     """
-    Generates and plots ARIMA forecasts against test data.
-
-    Parameters:
-    - res: fitted ARIMA model (statsmodels result object)
-    - train_df: DataFrame with training data (must include 'rate')
-    - test_df: DataFrame with test data (must include 'rate')
-    - steps: number of steps to forecast (default: 712 for 2 years)
-    - rate_col: name of the column containing exchange rates in both datasets
-    - title: custom plot title
+    Simula múltiples trayectorias desde un modelo ARIMA y las compara con el test set.
     """
-    # Forecast range
-    last_train_date = train_df.index.max()
-    start_fc = last_train_date + pd.Timedelta(days=1)
-    fc_index = pd.date_range(start=start_fc, periods=steps, freq='D')
+    # Get correct forecast dates starting from last training date
+    last_train_date = train_df.index[-1]
+    forecast_dates = pd.date_range(
+        start=last_train_date,
+        periods=steps+1, # +1 to include the last date
+        freq='D'
+    )
 
-    # Forecast in log scale
-    fc = res.get_forecast(steps=steps)
-    fc_log = pd.Series(fc.predicted_mean.values, index=fc_index, name='fc_log_rate')
+    all_paths = pd.DataFrame(index=forecast_dates)
+    last_log_value = np.log(train_df[rate_col].iloc[-1])
     
-    ci = fc.conf_int()
-    ci.index = fc_index
-    ci.columns = ['lower_log_rate', 'upper_log_rate']
+    for i in range(n_sims):
+        # Simulación en log
+        sim_log = res.simulate(nsimulations=steps, anchor='end')
+        # sim_log = np.clip(sim_log, -5, 5)
+        
+        # Back-transform      
+        sim_rate = np.concatenate([[np.exp(last_log_value)], np.exp(sim_log)])
+        all_paths[f'path_{i+1}'] = pd.Series(sim_rate, index=forecast_dates)
 
-    # Back-transform to rate
-    fc_rate = np.exp(fc_log)
-    ci_lower = np.exp(ci['lower_log_rate'])
-    ci_upper = np.exp(ci['upper_log_rate'])
-
-    # Align actual test data
-    test_rate = test_df[rate_col].loc[start_fc:fc_index[-1]]
-
-    # Plot
+    # Plotting
     plt.figure(figsize=(14,6))
-    plt.plot(train_df[rate_col], label='Train (rate)', color='blue')
-    plt.plot(fc_rate, label='Forecast', color='red')
-    plt.fill_between(fc_rate.index, ci_lower, ci_upper, color='gray', alpha=0.3)
-    plt.plot(test_rate, label='Test (actual)', color='orange')
-    plt.title(title)
+    
+    # Plot training data (last 30 few points)
+    plt.plot(train_df.index[-30:], train_df[rate_col].iloc[-30:], 
+             color='blue', label='Train (interpolated rate)', linewidth=2)
+        
+    # Plot the test data only for forecast period
+    mask = (test_df.index >= forecast_dates[0]) & (test_df.index <= forecast_dates[-1])
+    test_period = test_df[mask]
+    plt.plot(test_period.index, test_period['rate'], 
+            color='orange', label='Test (forecast period)', 
+            linewidth=2)
+
+    # Add vertical line at forecast start
+    plt.axvline(x=last_train_date, 
+                color='gray', linestyle=':', alpha=0.5,
+                label='Forecast start')
+            
+    # Plot simulated paths
+    for idx, col in enumerate(all_paths.columns[:n_show]):
+        if idx == 0:
+            plt.plot(all_paths[col], color='gray', alpha=0.5, 
+                     label='Simulated paths')
+        else:
+            plt.plot(all_paths[col], color='gray', alpha=0.5)
+
+    plt.title(f'Last 30 days + Simulated Paths (ARIMA)')
     plt.xlabel('Date')
     plt.ylabel('Rate')
     plt.legend()
     plt.grid(True)
-    plt.tight_layout()
     plt.show()
 
-    return fc_rate, test_rate
+    return all_paths
 
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
-def evaluate_forecast_metrics(fc_rate, test_df, rate_col='rate', verbose=True):
+def evaluate_simulations(all_paths, test_df, rate_col='rate', steps=None, verbose=True):
     """
-    Aligns forecast and test data indices and computes RMSE and MAE.
+    Evalúa RMSE y MAE para cada trayectoria simulada y calcula sus medias.
 
     Parameters:
-    - fc_rate: pandas Series with forecasted rates (index = datetime)
-    - test_df: DataFrame containing actual rates (must include `rate_col`)
-    - rate_col: name of the column containing the actual exchange rates
-    - verbose: if True, prints metrics
+    - all_paths: DataFrame con trayectorias simuladas (de simulate_paths_and_plot)
+    - test_df: DataFrame con los datos reales (contiene rate_col)
+    - rate_col: columna con valores reales
+    - steps: número de pasos a evaluar (opcional)
+    - verbose: si True imprime métricas globales
 
     Returns:
-    - metrics: dict with 'rmse' and 'mae'
+    - metrics: dict con medias y listas de RMSE y MAE
     """
-    # Drop missing actual values
-    test_rate = test_df[[rate_col]].dropna().copy()
+    # Drop rows in test_df where rate is NaN
+    df_eval = test_df[[rate_col]].dropna().copy()
 
-    # Align forecast and test data on common dates
-    common_index = test_rate.index.intersection(fc_rate.index)
-    y_true = test_rate.loc[common_index, rate_col]
-    y_pred = fc_rate.loc[common_index]
+    # Find overlapping dates between test_df and forecast paths
+    eval_dates = df_eval.index.intersection(all_paths.index)
 
-    # Compute metrics
-    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-    mae = mean_absolute_error(y_true, y_pred)
+    if len(eval_dates) == 0:
+        print("⚠️ No hay fechas en común entre predicciones y datos de prueba")
+        return {
+            'mean_rmse': np.nan,
+            'mean_mae': np.nan,
+            'rmse_list': [],
+            'mae_list': []
+        }
+
+    # Extract true values only for valid dates
+    y_true = df_eval.loc[eval_dates, rate_col].values
+
+    # Evaluate RMSE and MAE per path <--
+    rmses, maes = [], []
+    
+    for col in all_paths.columns:
+        y_pred = all_paths.loc[eval_dates, col].values
+            
+        rmses.append(np.sqrt(mean_squared_error(y_true, y_pred)))
+        maes.append(mean_absolute_error(y_true, y_pred))
+
+    metrics = {
+        'mean_rmse': np.mean(rmses) if rmses else np.nan,
+        'mean_mae': np.mean(maes) if maes else np.nan,
+        'rmse_list': rmses,
+        'mae_list': maes
+    }
 
     if verbose:
-        print(f"Aligned y_true: {len(y_true)}, y_pred: {len(y_pred)}")
-        print(f"✅ RMSE: {rmse:.6f}")
-        print(f"✅ MAE: {mae:.6f}")
+        print(f"Evaluated dates: {len(eval_dates)}")
+        print(f"Evaluated paths: {len(rmses)} of {len(all_paths.columns)}")
+        print(f"✅ Mean RMSE: {metrics['mean_rmse']:.6f}")
+        print(f"✅ Mean MAE: {metrics['mean_mae']:.6f}")
 
-    return {'rmse': rmse, 'mae': mae}
+    return metrics
