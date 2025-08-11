@@ -3,15 +3,34 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-def simulate_paths_and_plot(res, train_df, test_df, steps, n_sims=1000, n_show=30, rate_col='rate'):
+def simulate_paths_and_plot(
+    res, train_df, test_df, steps, n_sims=1000, n_show=30, 
+    rate_col='rate', base_seed=42
+):
     """
-    Simula múltiples trayectorias desde un modelo ARIMA y las compara con el test set.
+    Simulates multiple trajectories from an ARIMA model and compares them to the test set.
+    Each simulated path uses a distinct random seed = base_seed + i for reproducibility.
+    
+    Parameters
+    ----------
+    res : fitted statsmodels ARIMA/ARMA model. The model used for simulation.
+    train_df : pd.DataFrame. Training data with datetime index and exchange rate column.
+    test_df : pd.DataFrame. Test data with datetime index and exchange rate column.
+    steps : int. Number of forecast steps.
+    n_sims : int, default=1000. Number of simulated paths.
+    n_show : int, default=30. Number of paths to plot.
+    rate_col : str, default='rate'. Column name for the exchange rate.
+    base_seed : int, default=42. Base value for deterministic seeds (path i uses seed = base_seed + i).
     """
-    # Get correct forecast dates starting from last training date
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
+    # Forecast dates starting from last training date
     last_train_date = train_df.index[-1]
     forecast_dates = pd.date_range(
         start=last_train_date,
-        periods=steps+1, # +1 to include the last date
+        periods=steps + 1,
         freq='D'
     )
 
@@ -19,42 +38,40 @@ def simulate_paths_and_plot(res, train_df, test_df, steps, n_sims=1000, n_show=3
     last_log_value = np.log(train_df[rate_col].iloc[-1])
     
     for i in range(n_sims):
-        # Simulación en log
+        # Deterministic seed for each path
+        np.random.seed(base_seed + i)
+
+        # Simulate in log scale
         sim_log = res.simulate(nsimulations=steps, anchor='end')
-        # sim_log = np.clip(sim_log, -5, 5)
-        
-        # Back-transform      
+
+        # Back-transform to rate
         sim_rate = np.concatenate([[np.exp(last_log_value)], np.exp(sim_log)])
         all_paths[f'path_{i+1}'] = pd.Series(sim_rate, index=forecast_dates)
 
-    # Plotting
-    plt.figure(figsize=(14,6))
-    
-    # Plot training data (last 30 few points)
+    # ---------------- Plotting ----------------
+    plt.figure(figsize=(14, 6))
+
+    # Last 30 days of training data
     plt.plot(train_df.index[-30:], train_df[rate_col].iloc[-30:], 
              color='blue', label='Train (interpolated rate)', linewidth=2)
-        
-    # Plot the test data only for forecast period
+
+    # Test period
     mask = (test_df.index >= forecast_dates[0]) & (test_df.index <= forecast_dates[-1])
     test_period = test_df[mask]
     plt.plot(test_period.index, test_period['rate'], 
-            color='orange', label='Test (forecast period)', 
-            linewidth=2)
+             color='orange', label='Test (forecast period)', linewidth=2)
 
-    # Add vertical line at forecast start
-    plt.axvline(x=last_train_date, 
-                color='gray', linestyle=':', alpha=0.5,
-                label='Forecast start')
-            
-    # Plot simulated paths
+    # Forecast start marker
+    plt.axvline(x=last_train_date, color='gray', linestyle=':', alpha=0.5, label='Forecast start')
+
+    # Simulated paths
     for idx, col in enumerate(all_paths.columns[:n_show]):
         if idx == 0:
-            plt.plot(all_paths[col], color='gray', alpha=0.5, 
-                     label='Simulated paths')
+            plt.plot(all_paths[col], color='gray', alpha=0.5, label='Simulated paths')
         else:
             plt.plot(all_paths[col], color='gray', alpha=0.5)
 
-    plt.title(f'Last 30 days + Simulated Paths (ARIMA)')
+    plt.title('Last 30 days + Simulated Paths (ARIMA)')
     plt.xlabel('Date')
     plt.ylabel('Rate')
     plt.legend()
@@ -62,6 +79,7 @@ def simulate_paths_and_plot(res, train_df, test_df, steps, n_sims=1000, n_show=3
     plt.show()
 
     return all_paths
+
 
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
@@ -107,8 +125,8 @@ def evaluate_simulations(all_paths, test_df, rate_col='rate', steps=None, verbos
         maes.append(mean_absolute_error(y_true, y_pred))
 
     metrics = {
-        'mean_rmse': np.mean(rmses) if rmses else np.nan,
-        'mean_mae': np.mean(maes) if maes else np.nan,
+        'expected_rmse': np.mean(rmses) if rmses else np.nan,
+        'expected_mae': np.mean(maes) if maes else np.nan,
         'rmse_list': rmses,
         'mae_list': maes
     }
@@ -116,7 +134,7 @@ def evaluate_simulations(all_paths, test_df, rate_col='rate', steps=None, verbos
     if verbose:
         print(f"Evaluated dates: {len(eval_dates)}")
         print(f"Evaluated paths: {len(rmses)} of {len(all_paths.columns)}")
-        print(f"✅ Mean RMSE: {metrics['mean_rmse']:.6f}")
-        print(f"✅ Mean MAE: {metrics['mean_mae']:.6f}")
+        print(f"✅ Expected RMSE: {metrics['expected_rmse']:.6f}")
+        print(f"✅ Expected MAE: {metrics['expected_mae']:.6f}")
 
     return metrics

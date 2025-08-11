@@ -77,35 +77,29 @@ def discretise_Wt(df, k=200, bins=(-0.5, 0.5), labels=(-1, 0, 1), plot=True):
 # ----------------------------------------
 def simulate_multiple_discrete_paths(start_value, p_dict, horizon=252, n_paths=1000, seed=None):
     """
-    Simulate multiple discrete random walk paths.
+    Simulate multiple discrete random walk paths using independent seeds per path.
 
     Parameters:
     - start_value: starting point for all paths (usually last scaled_Wt)
     - p_dict: dictionary with keys -1, 0, +1 and their associated probabilities
     - horizon: number of time steps to simulate
     - n_paths: number of paths to generate
-    - seed: random seed for reproducibility
+    - seed: base random seed for reproducibility
 
     Returns:
     - paths: np.ndarray of shape (n_paths, horizon + 1)
-    [
-        [start_value, sv+1, sv+1-1, sv+1-1-1, ++0...] trayectoria 1
-        [start_value, sv+1, sv+1-1, sv+1-1+1, +0...] trayectoria 2
-        [...] trayectoria ...
-    ]
     """
-    if seed is not None:
-        random.seed(seed)
-
-    probs = [-1, 0, 1]
-    weights = [p_dict[-1], p_dict[0], p_dict[1]]
+    steps_values = np.array([-1, 0, 1])
+    weights = np.array([p_dict[-1], p_dict[0], p_dict[1]])
     
     paths = np.zeros((n_paths, horizon + 1))
     paths[:, 0] = start_value
 
-    for t in range(1, horizon + 1):
-        steps = random.choices(probs, weights=weights, k=n_paths)
-        paths[:, t] = paths[:, t - 1] + steps
+    for i in range(n_paths):
+        if seed is not None:
+            np.random.seed(seed + i)  # different seed for each path
+        steps = np.random.choice(steps_values, size=horizon, p=weights)
+        paths[i, 1:] = np.cumsum(np.insert(steps, 0, start_value))[1:]
 
     return paths # 1000 simulated scaled Wt paths 
 
