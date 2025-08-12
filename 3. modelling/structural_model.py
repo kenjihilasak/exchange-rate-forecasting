@@ -111,11 +111,12 @@ def simulate_structural_ar1_paths_and_plot(
     n_paths = n_sims
     u0 = float(residuals.iloc[-1]) if use_last_resid else 0.0
 
-    # --- generate paths with per-path seeding: seed = base_seed + i ---
+    # --- generate paths ------
+    np.random.seed(base_seed)  # control all aleatory sequences
     u = np.zeros((n_days, n_paths), dtype=float)
 
     for i in range(n_paths):
-        np.random.seed(base_seed + i)  # deterministic seed for path i
+        # np.random.seed(base_seed + i)  # deterministic seed for path i
         eps_i = np.random.normal(loc=0.0, scale=sigma, size=n_days)
 
         # AR(1) recursion per path

@@ -105,14 +105,16 @@ def simulate_structural_ar1_garch_paths_and_plot(
         print(f"Volatility persistence (alpha+beta): {alpha + beta:.4f}")
 
     # ---------- Simulate paths ----------
-    rng = np.random.default_rng(seed)
+    # rng = np.random.default_rng(seed)
+    np.random.seed(seed)  # control all the path sequences
+
     last_u = float(residuals.iloc[-1]) if use_last_resid else 0.0
     initial_value = np.array([last_u], dtype=float)
 
     # Simulate n_sims trajectories one-by-one (no 'repetitions' arg in this arch version)
     u_sims = []
     for i in range(n_sims):
-        np.random.seed(seed + i)  # Common Random Numbers CRN
+        # np.random.seed(seed + i)  # Common Random Numbers CRN
         sim_i = am.simulate(
             params=res.params,
             nobs=steps,

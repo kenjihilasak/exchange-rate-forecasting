@@ -94,10 +94,12 @@ def simulate_multiple_discrete_paths(start_value, p_dict, horizon=252, n_paths=1
     
     paths = np.zeros((n_paths, horizon + 1))
     paths[:, 0] = start_value
+    np.random.seed(seed)  # control all aleatory sequences
 
     for i in range(n_paths):
-        if seed is not None:
-            np.random.seed(seed + i)  # different seed for each path
+        # if seed is not None:
+        #     np.random.seed(seed + i)  # different seed for each path
+
         steps = np.random.choice(steps_values, size=horizon, p=weights)
         paths[i, 1:] = np.cumsum(np.insert(steps, 0, start_value))[1:]
 

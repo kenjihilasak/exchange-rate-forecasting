@@ -36,10 +36,11 @@ def simulate_paths_and_plot(
 
     all_paths = pd.DataFrame(index=forecast_dates)
     last_log_value = np.log(train_df[rate_col].iloc[-1])
+    np.random.seed(base_seed)  # control all aleatory sequences
     
     for i in range(n_sims):
         # Deterministic seed for each path
-        np.random.seed(base_seed + i)
+        # np.random.seed(base_seed + i)
 
         # Simulate in log scale
         sim_log = res.simulate(nsimulations=steps, anchor='end')
