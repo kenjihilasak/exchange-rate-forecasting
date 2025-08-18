@@ -9,8 +9,7 @@ def simulate_paths_and_plot(
 ):
     """
     Simulates multiple trajectories from an ARIMA model and compares them to the test set.
-    Each simulated path uses a distinct random seed = base_seed + i for reproducibility.
-    
+
     Parameters
     ----------
     res : fitted statsmodels ARIMA/ARMA model. The model used for simulation.
@@ -36,6 +35,7 @@ def simulate_paths_and_plot(
 
     all_paths = pd.DataFrame(index=forecast_dates)
     last_log_value = np.log(train_df[rate_col].iloc[-1])
+    
     np.random.seed(base_seed)  # control all aleatory sequences
     
     for i in range(n_sims):
@@ -71,8 +71,8 @@ def simulate_paths_and_plot(
             plt.plot(all_paths[col], color='gray', alpha=0.5, label='Simulated paths')
         else:
             plt.plot(all_paths[col], color='gray', alpha=0.5)
-
-    plt.title('Last 30 days + Simulated Paths (ARIMA)')
+    
+    plt.title(f'Arima{res.model.order} — {steps}-day simulations ({all_paths.shape[0]} Paths)')
     plt.xlabel('Date')
     plt.ylabel('Rate')
     plt.legend()
@@ -135,7 +135,7 @@ def evaluate_simulations(all_paths, test_df, rate_col='rate', steps=None, verbos
     if verbose:
         print(f"Evaluated dates: {len(eval_dates)}")
         print(f"Evaluated paths: {len(rmses)} of {len(all_paths.columns)}")
-        print(f"✅ Expected RMSE: {metrics['expected_rmse']:.6f}")
-        print(f"✅ Expected MAE: {metrics['expected_mae']:.6f}")
+        print(f"✅ Expected RMSE(%): {metrics['expected_rmse']*100:.2f}")
+        print(f"✅ Expected MAE(%): {metrics['expected_mae']*100:.2f}")
 
     return metrics
