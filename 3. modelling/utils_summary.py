@@ -9,7 +9,7 @@ def pack_metrics(metrics: dict, model_name: str, horizon: int | str) -> dict:
       - 'rmse(%)', 'mae(%)' (required for the summary)
     """
     row = {
-        "model": model_name,
+        "model_name": model_name,
         "horizon": horizon,
         "rmse(%)": metrics.get("rmse(%)", np.nan),
         "mae(%)": metrics.get("mae(%)", np.nan),
@@ -21,9 +21,31 @@ def pack_metrics(metrics: dict, model_name: str, horizon: int | str) -> dict:
     return row
 
 def append_result(summary_df: pd.DataFrame, metrics: dict, model_name: str, horizon: int | str) -> pd.DataFrame:
-    """Append one normalized row to the running summary table."""
+    """Append or update one normalized row in the running summary table."""
     row = pack_metrics(metrics, model_name, horizon)
-    return pd.concat([summary_df, pd.DataFrame([row])], ignore_index=True)
+
+    # Asegurar que model_name y horizon están en el DataFrame
+    if summary_df.empty or not {"model_name", "horizon"}.issubset(summary_df.columns):
+        return pd.concat([summary_df, pd.DataFrame([row])], ignore_index=True)
+
+    # Convertir tipos para comparación segura
+    summary_df["model_name"] = summary_df["model_name"].astype(str)
+    summary_df["horizon"] = summary_df["horizon"].astype(str)
+    model_name = str(model_name)
+    horizon = str(horizon)
+
+    # Buscar coincidencias
+    mask = (summary_df["model_name"] == model_name) & (summary_df["horizon"] == horizon)
+
+    if mask.any():
+        # Reemplazar métricas existentes
+        for key, value in row.items():
+            summary_df.loc[mask, key] = value
+    else:
+        # Añadir nueva fila
+        summary_df = pd.concat([summary_df, pd.DataFrame([row])], ignore_index=True)
+
+    return summary_df
 
 def finalize_summary(summary_df: pd.DataFrame) -> pd.DataFrame:
     """

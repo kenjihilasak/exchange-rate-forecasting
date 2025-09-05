@@ -103,9 +103,11 @@ def simulate_structural_ar1_paths_and_plot(
         raise ValueError(f"Not enough numeric residuals for AR(1): got {residuals.size}")
 
     ar1 = AutoReg(residuals, lags=1, old_names=False).fit()
+    print(f'params AR(1): {ar1.params}')
+    const = ar1.params[0]
     phi = ar1.params[1]
     sigma = float(np.std(ar1.resid, ddof=1))
-    ar1_params = {'phi': float(phi), 'sigma': float(sigma)}
+    ar1_params = {'const': float(const), 'phi': float(phi), 'sigma': float(sigma)}
 
     n_days = steps
     n_paths = n_sims
@@ -304,8 +306,8 @@ def evaluate_structural_sims(
         print(f"Evaluated dates: {len(eval_dates)}")
         print(f"Evaluated paths: {metrics['n_paths']} of {len(all_paths.columns)}")
         if metrics['n_paths'] > 0:
-            print(f"✅ Expected RMSE (mean over paths): {expected_rmse:.6f}")
-            print(f"✅ Expected MAE  (mean over paths): {expected_mae:.6f}")
+            print(f"✅ Expected RMSE(%): {metrics['expected_rmse']*100:.2f}")
+            print(f"✅ Expected MAE(%): {metrics['expected_mae']*100:.2f}")
         else:
             print("⚠️ No valid paths (all had NaNs on eval dates).")
 

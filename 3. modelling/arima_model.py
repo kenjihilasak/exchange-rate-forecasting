@@ -50,7 +50,7 @@ def simulate_paths_and_plot(
         all_paths[f'path_{i+1}'] = pd.Series(sim_rate, index=forecast_dates)
 
     # ---------------- Plotting ----------------
-    plt.figure(figsize=(14, 6))
+    plt.figure(figsize=(14, 4))
 
     # Last 30 days of training data
     plt.plot(train_df.index[-30:], train_df[rate_col].iloc[-30:], 
@@ -72,7 +72,7 @@ def simulate_paths_and_plot(
         else:
             plt.plot(all_paths[col], color='gray', alpha=0.5)
     
-    plt.title(f'Arima{res.model.order} — {steps}-day simulations ({all_paths.shape[0]} Paths)')
+    plt.title(f'Arima{res.model.order} — {steps}-day simulations ({all_paths.shape[1]} Paths)')
     plt.xlabel('Date')
     plt.ylabel('Rate')
     plt.legend()

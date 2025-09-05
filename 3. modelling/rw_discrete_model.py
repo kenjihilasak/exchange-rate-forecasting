@@ -41,14 +41,14 @@ def discretise_Wt(df, k=200, bins=(-0.5, 0.5), labels=(-1, 0, 1), plot=True):
 
     print("Empirical probabilities:")
     print(f"P(-1) = {p[-1]:.4f}, P(0) = {p[0]:.4f}, P(+1) = {p[1]:.4f}")
-
+    
     if plot:
         # Count the frequency of each bin and convert to percentage
         counts = df['scaled_Wt_bin'].value_counts(sort=False)
         percentages = 100 * counts / counts.sum()
 
         # Plot the histogram grouped by categories
-        fig, ax = plt.subplots(figsize=(8, 5))
+        fig, ax = plt.subplots(figsize=(5, 5))
         bars = ax.bar(plot_labels, percentages, edgecolor='black')
 
         # Add percentage labels on each bar, with a small offset to avoid overlap
@@ -61,9 +61,9 @@ def discretise_Wt(df, k=200, bins=(-0.5, 0.5), labels=(-1, 0, 1), plot=True):
                 ha='center', va='bottom', fontsize=11
             )
 
-        ax.set_xlabel('Intervals of: ΔWt*k')
+        ax.set_xlabel('Intervals of: εt*k')
         ax.set_ylabel('Percentage (%)')
-        ax.set_title('Histogram of scaled ΔWt (grouped by intervals)')
+        ax.set_title('Histogram of scaled εt (grouped by intervals)')
         ax.grid(axis='y')
         plt.xticks(rotation=45)
         plt.ylim(0, max(percentages) * 1.15)  # Add extra space on top
@@ -174,7 +174,7 @@ def plot_multiple_paths_vs_history(train_df, df_paths, df_test=None, rate_col='r
     forecast_end = df_paths.columns[-1]
     steps = len(df_paths.columns) - 1  # Exclude X_o
     
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(12, 5))
 
     # Historical data (last 30 days)
     plt.plot(df_hist.index, df_hist['rate_interpolated'], 
